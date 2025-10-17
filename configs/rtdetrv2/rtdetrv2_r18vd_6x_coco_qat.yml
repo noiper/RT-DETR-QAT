@@ -1,0 +1,79 @@
+_BASE_: [
+  '../dataset/coco_detection.yml',
+  './include/optimizer.yml',
+  './include/rtdetrv2_r50vd.yml',
+  './include/dataloader.yml',
+]
+
+task: detection
+use_ema: true
+distill: true
+teacher_weights: rtdetrv2_r18vd_6x_coco.pth
+distill_loss_alpha: 0.1
+
+weights: rtdetrv2_r18vd_6x_coco.pth
+
+model: RTDETR
+backbone: ResNet
+neck: HybridEncoder
+head: RTDETRTransformer
+
+Backbone:
+  name: ResNet
+  variant: 18
+  return_idx: [1, 2, 3]
+  num_stages: 4
+  freeze_at: -1
+  freeze_norm: false
+
+HybridEncoder:
+  in_channels: [128, 256, 512]
+  hidden_dim: 256
+  use_encoder_idx: [2]
+  num_encoder_layers: 1
+  encoder_layer:
+    name: TransformerEncoderLayer
+    d_model: 256
+    n_head: 8
+    dim_feedforward: 1024
+    dropout: 0.
+    activation: relu
+
+RTDETRTransformer:
+  num_classes: 80
+  hidden_dim: 256
+  num_queries: 300
+  num_decoder_layers: 6
+  num_denoising: 100
+  eval_idx: -1
+  decoder:
+    name: RTDETRV2Decoder
+    num_layers: 6
+    return_intermediate: true
+    layer:
+      name: TransformerDecoderLayer
+      d_model: 256
+      n_head: 8
+      dim_feedforward: 1024
+      dropout: 0.
+
+criterion:
+  name: RTDETRV2Criterion
+  num_classes: 80
+  loss_class:
+    name: FocalLoss
+    use_sigmoid: true
+    gamma: 2.0
+    alpha: 0.25
+    loss_weight: 1.0
+  loss_bbox:
+    name: L1Loss
+    loss_weight: 5.0
+  loss_giou:
+    name: GIoULoss
+    loss_weight: 2.0
+  matcher:
+    name: HungarianMatcher
+    cost_class: 2.0
+    cost_bbox: 5.0
+    cost_giou: 2.0
